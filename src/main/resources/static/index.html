@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Chat</title>
+    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Uber Move';
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+<noscript>
+    <h2 class="text-red-600">Seems your browser doesn't support Javascript! Websocket relies on Javascript being enabled. Please enable Javascript and reload this page!</h2>
+</noscript>
+
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div id="connection-status" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6">
+        <p class="font-medium">Status: <span id="status-text">Disconnected</span></p>
+    </div>
+
+    <div id="user-info" class="bg-white shadow rounded-lg p-4 mb-6">
+        <h2 class="text-xl font-bold text-gray-800">Welcome, <span id="current-username">Guest</span></h2>
+    </div>
+
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="p-4 border-b border-gray-200">
+            <div class="flex flex-col space-y-4">
+                <div class="flex flex-col space-y-1">
+                    <label for="server-url" class="font-medium text-gray-700">Server URL:</label>
+                    <input type="text" id="server-url" class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" value="http://192.168.100.99:8080/gs-guide-websocket">
+                </div>
+
+                <div class="flex items-center space-x-4">
+                    <button id="connect" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition">Connect</button>
+                    <button id="disconnect" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 transition" disabled>Disconnect</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-b border-gray-200">
+            <div class="flex flex-col space-y-4">
+                <div class="flex flex-col space-y-1">
+                    <label for="name" class="font-medium text-gray-700">What is your name?</label>
+                    <input type="text" id="name" class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Your name">
+                </div>
+
+                <div class="flex flex-col space-y-1">
+                    <label for="message" class="font-medium text-gray-700">Your message:</label>
+                    <input type="text" id="message" class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Type your message here...">
+                </div>
+
+                <button id="send" class="self-start px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition" disabled>Send</button>
+            </div>
+        </div>
+
+        <div class="p-4">
+            <h3 class="font-medium text-lg text-gray-800 mb-4">Conversation</h3>
+            <table id="conversation" class="w-full hidden">
+                <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-2 text-left text-gray-700">Greetings</th>
+                </tr>
+                </thead>
+                <tbody id="greetings" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let stompClient = null;
+    let connectionAttempts = 0;
+    const maxReconnectAttempts = 3;
+
+    function createStompClient() {
+        const serverUrl = $("#server-url").val();
+        updateStatus("Connecting to " + serverUrl + "...", "yellow");
+
+        return new StompJs.Client({
+            webSocketFactory: () => new SockJS(serverUrl),
+            reconnectDelay: 5000,
+            heartbeatIncoming: 4000,
+            heartbeatOutgoing: 4000
+        });
+    }
+
+    function updateStatus(message, color) {
+        $("#status-text").text(message);
+        const statusDiv = $("#connection-status");
+        statusDiv.removeClass("bg-yellow-100 bg-red-100 bg-green-100 border-yellow-500 border-red-500 border-green-500 text-yellow-700 text-red-700 text-green-700");
+
+        if (color === "yellow") {
+            statusDiv.addClass("bg-yellow-100 border-yellow-500 text-yellow-700");
+        } else if (color === "red") {
+            statusDiv.addClass("bg-red-100 border-red-500 text-red-700");
+        } else if (color === "green") {
+            statusDiv.addClass("bg-green-100 border-green-500 text-green-700");
+        }
+    }
+
+    function setupStompClient() {
+        stompClient = createStompClient();
+
+        stompClient.onConnect = (frame) => {
+            setConnected(true);
+            connectionAttempts = 0;
+            updateStatus("Connected", "green");
+            console.log('Connected: ' + frame);
+
+            stompClient.subscribe('/topic/greetings', (greeting) => {
+                try {
+                    const message = JSON.parse(greeting.body);
+                    showGreeting(message.content);
+
+                    if (message.name) {
+                        $("#current-username").text(message.name);
+                    }
+                } catch (e) {
+                    console.error("Error parsing message: ", e);
+                    showGreeting("Error: Could not parse message");
+                }
+            });
+        };
+
+        stompClient.onWebSocketError = (error) => {
+            console.error('WebSocket error', error);
+            updateStatus("Connection error", "red");
+
+            connectionAttempts++;
+            if (connectionAttempts < maxReconnectAttempts) {
+                updateStatus(`Retrying (${connectionAttempts}/${maxReconnectAttempts})...`, "yellow");
+                setTimeout(() => {
+                    if (!stompClient.connected) {
+                        try {
+                            stompClient.deactivate();
+                            setupStompClient();
+                            stompClient.activate();
+                        } catch (e) {
+                            console.error("Reconnect error: ", e);
+                        }
+                    }
+                }, 3000);
+            } else {
+                updateStatus("Failed after multiple attempts.", "red");
+            }
+        };
+
+        stompClient.onStompError = (frame) => {
+            console.error('STOMP error: ' + frame.headers['message']);
+            updateStatus("STOMP error: " + frame.headers['message'], "red");
+        };
+
+        stompClient.onDisconnect = () => {
+            updateStatus("Disconnected", "yellow");
+        };
+    }
+
+    function setConnected(connected) {
+        $("#connect").prop("disabled", connected);
+        $("#disconnect").prop("disabled", !connected);
+        $("#send").prop("disabled", !connected);
+        $("#server-url").prop("disabled", connected);
+
+        if (connected) {
+            $("#conversation").show();
+        } else {
+            $("#conversation").hide();
+        }
+        $("#greetings").html("");
+    }
+
+    function connect() {
+        connectionAttempts = 0;
+        setupStompClient();
+        stompClient.activate();
+    }
+
+    function disconnect() {
+        if (stompClient) {
+            stompClient.deactivate();
+        }
+        setConnected(false);
+        console.log("Disconnected");
+    }
+
+    function sendMessage() {
+        const name = $("#name").val();
+        const messageContent = $("#message").val();
+
+        if (!name && !messageContent) {
+            alert("Please enter your name or a message");
+            return;
+        }
+
+        if (name) {
+            $("#current-username").text(name);
+        }
+
+        try {
+            stompClient.publish({
+                destination: "/app/hello",
+                body: JSON.stringify({
+                    'name': name || "Guest",
+                    'content': messageContent || name
+                })
+            });
+
+            $("#message").val("");
+        } catch (e) {
+            console.error("Send error: ", e);
+            updateStatus("Error sending message", "red");
+        }
+    }
+
+    function showGreeting(message) {
+        $("#greetings").append("<tr><td class='px-4 py-3'>" + message + "</td></tr>");
+    }
+
+    $(function () {
+        updateStatus("Disconnected", "yellow");
+
+        $("form").on('submit', (e) => e.preventDefault());
+        $("#connect").click(() => connect());
+        $("#disconnect").click(() => disconnect());
+        $("#send").click(() => sendMessage());
+
+        $("#message").keypress(function (e) {
+            if (e.which === 13 && !$("#send").prop("disabled")) {
+                sendMessage();
+            }
+        });
+
+        $("#server-url").keypress(function (e) {
+            if (e.which === 13 && !$("#connect").prop("disabled")) {
+                connect();
+            }
+        });
+    });
+</script>
+</body>
+</html>
+
+
+
