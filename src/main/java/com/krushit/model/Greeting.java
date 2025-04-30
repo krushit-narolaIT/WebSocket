@@ -1,7 +1,6 @@
 package com.krushit.model;
 
 public class Greeting {
-
 	private String content;
 
 	public Greeting() {

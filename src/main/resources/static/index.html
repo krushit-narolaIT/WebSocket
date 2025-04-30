@@ -1,76 +1,89 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>WebSocket Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- External Scripts -->
     <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+
     <style>
         body {
-            font-family: 'Uber Move';
+            font-family: 'Uber Move', sans-serif;
         }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
+
 <noscript>
-    <h2 class="text-red-600">Seems your browser doesn't support Javascript! Websocket relies on Javascript being enabled. Please enable Javascript and reload this page!</h2>
+    <h2 class="text-red-600 text-center p-4">JavaScript is required. Please enable it.</h2>
 </noscript>
 
 <div class="container mx-auto px-4 py-8 max-w-4xl">
-    <div id="connection-status" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6">
+    <!-- Connection Status -->
+    <div id="connection-status" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded mb-6">
         <p class="font-medium">Status: <span id="status-text">Disconnected</span></p>
     </div>
 
+    <!-- User Info -->
     <div id="user-info" class="bg-white shadow rounded-lg p-4 mb-6">
         <h2 class="text-xl font-bold text-gray-800">Welcome, <span id="current-username">Guest</span></h2>
     </div>
 
+    <!-- Chat Box -->
     <div class="bg-white shadow rounded-lg overflow-hidden">
+        <!-- Server Settings -->
         <div class="p-4 border-b border-gray-200">
             <div class="flex flex-col space-y-4">
                 <div class="flex flex-col space-y-1">
                     <label for="server-url" class="font-medium text-gray-700">Server URL:</label>
-                    <input type="text" id="server-url" class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" value="http://192.168.100.99:8080/gs-guide-websocket">
+                    <input type="text" id="server-url" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value="http://192.168.100.99:8080/gs-guide-websocket">
                 </div>
 
-                <div class="flex items-center space-x-4">
-                    <button id="connect" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition">Connect</button>
-                    <button id="disconnect" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 transition" disabled>Disconnect</button>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-2 sm:space-y-0">
+                    <button id="connect" class="w-full sm:w-auto px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">Connect</button>
+                    <button id="disconnect" class="w-full sm:w-auto px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition" disabled>Disconnect</button>
                 </div>
             </div>
         </div>
 
+        <!-- Name & Message Input -->
         <div class="p-4 border-b border-gray-200">
             <div class="flex flex-col space-y-4">
                 <div class="flex flex-col space-y-1">
                     <label for="name" class="font-medium text-gray-700">What is your name?</label>
-                    <input type="text" id="name" class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Your name">
+                    <input type="text" id="name" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Your name">
                 </div>
 
                 <div class="flex flex-col space-y-1">
                     <label for="message" class="font-medium text-gray-700">Your message:</label>
-                    <input type="text" id="message" class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Type your message here...">
+                    <input type="text" id="message" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your message here...">
                 </div>
 
-                <button id="send" class="self-start px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition" disabled>Send</button>
+                <button id="send" class="self-start sm:self-auto px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition" disabled>Send</button>
             </div>
         </div>
 
-        <div class="p-4">
+        <!-- Conversation Display -->
+        <div class="p-4 overflow-x-auto">
             <h3 class="font-medium text-lg text-gray-800 mb-4">Conversation</h3>
-            <table id="conversation" class="w-full hidden">
-                <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-4 py-2 text-left text-gray-700">Greetings</th>
-                </tr>
-                </thead>
-                <tbody id="greetings" class="divide-y divide-gray-100"></tbody>
-            </table>
+            <div class="rounded-lg border border-gray-200">
+                <table id="conversation" class="min-w-full hidden">
+                    <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-gray-700">Greetings</th>
+                    </tr>
+                    </thead>
+                    <tbody id="greetings" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
-
 <script>
     let stompClient = null;
     let connectionAttempts = 0;
@@ -243,6 +256,3 @@
 </script>
 </body>
 </html>
-
-
-

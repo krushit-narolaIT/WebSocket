@@ -1,15 +1,15 @@
 package com.krushit.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class HelloMessage {
-
 	private String name;
-
-	public HelloMessage() {
-	}
-
-	public HelloMessage(String name) {
-		this.name = name;
-	}
+	private String content;
 
 	public String getName() {
 		return name;
@@ -17,5 +17,13 @@ public class HelloMessage {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	public String getContent() {
+		return content;
+	}
+
+	public void setContent(String content) {
+		this.content = content;
 	}
 }

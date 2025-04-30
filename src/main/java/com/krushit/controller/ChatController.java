@@ -1,4 +1,4 @@
-package com.example.websocketdemo;
+package com.krushit.controller;
 
 import com.krushit.model.Message;
 import org.springframework.messaging.handler.annotation.MessageMapping;
